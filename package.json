@@ -4,7 +4,8 @@
   "description": "Scrab Fluk",
   "main": "app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start":"app.js"
   },
   "repository": {
     "type": "git",
@@ -15,5 +16,8 @@
   "bugs": {
     "url": "https://github.com/SETTER2000/scrab-fluk/issues"
   },
-  "homepage": "https://github.com/SETTER2000/scrab-fluk#readme"
+  "homepage": "https://github.com/SETTER2000/scrab-fluk#readme",
+  "dependencies": {
+    "osmosis": "^1.1.10"
+  }
 }
