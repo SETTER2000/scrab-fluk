@@ -1,106 +1,109 @@
 const osmosis = require('osmosis');
 const url = require('url');
 const fs = require('fs');
+const _ = require('lodash');
 const domain = 'http://www.flk.ru/';
 
-async function  getSection(res) {
-    console.log('Функция getSection. Сюда должны подключиться: ', res);
-    return new Promise((resolve, reject) => {
+
+async function subSubSection(res) {
+    console.log('Функция subSubSection. Сюда должны подключиться: ', res);
+    return new Promise(async (resolve, reject) => {
         let releasesMap = [];
-        let notConnect = [];
-        osmosis
+        await  osmosis
             .get(res)
-            .find('a')
+            .filter('.txt .txt >h3')
             .set({
                 'name': 'a/text()',
-                'url': 'a@href',
+                'productUrl': 'a@href',
                 'litters': 'p',
                 'owners': 'p',
             })
-            .then(async (context, data) => {
-                let v;
+            .then(async (context, data, next) => {
                 try {
-                    await releasesMap.push(data);
+                    data.productUrl = data.productUrl.replace(/\.\.\//gi, domain);
                 } catch (e) {
-                    v = await  console.log(e); // Ошибка!
+                    await  console.log(e); // Ошибка!
                 }
             })
+            .delay(2000)
+            .data(data => releasesMap.push(data))
             .error(err => reject(err))
+            // .debug(console.log)
             .done(() => resolve(releasesMap));
     });
 }
 
-function getFluke() {
-    return new Promise((resolve, reject) => {
-        let headersFluke = [];
-        osmosis
-            .get(domain)
-            .find('h3>a')
-            .follow('@href')
-            .find('.txt>.txt')
+
+async function subSection(res) {
+    console.log('Функция subSection. Сюда должны подключиться: ', res);
+    return new Promise(async (resolve, reject) => {
+        let releasesMap = [];
+        await  osmosis
+            .get(res)
+            .find('.txt .txt >h3')
             .set({
-                'header': 'h2/text()',
-                'url': 'h3>a@href',
-                'sections':'p'
+                'name': 'a/text()',
+                'subSectionUrl': 'a@href',
+                'subSubSection': 'p'
             })
             .then(async (context, data) => {
-                // console.log('DATA2: ', data);
-                let url = data.url;
-                url = url.replace(/\.\.\//gi, domain);
                 try {
-
-                    data.sections = await getSection(url);
+                    data.subSubSectionUrl = data.subSubSectionUrl.replace(/\.\.\//gi, domain);
+                    data.subSubSection = await subSubSection(data.subSubSectionUrl);
                 } catch (e) {
-                    await  console.log('В функции getSection  произошла ошибка: ', e); // Ошибка!
+                    await  console.log(e);
                 }
             })
-            // .delay(5000)
+            .delay(10000)
+            .data(data => releasesMap.push(data))
+            .error(err => reject(err))
+            // .debug(console.log)
+            .done(() => resolve(releasesMap));
+    });
+}
+
+async function getFluke() {
+    return new Promise(async (resolve, reject) => {
+        let releasesMap = [];
+        await  osmosis
+            .get(domain)
+            .find('.txt > .txt > h3')
+            .set({
+                'section': 'a/text()',
+                'sectionUrl': 'a@href',
+                'subSections': 'p'
+            })
+            .then(async (context, data) => {
+                try {
+                    data.sectionUrl = `${domain}${data.sectionUrl}`;
+                    data.subSections = await subSection(data.sectionUrl);
+                } catch (e) {
+                    await  console.log(`Обработка обещаний subSection url: ${data.sectionUrl} : `, e); // Ошибка!
+
+                }
+            })
+            .delay(120000)
+            .data(data => releasesMap.push(data))
             // .then(async (context, data) => {
-            //     // console.log('DATA: ', data);
+            //     let v;
             //     try {
             //         await releasesMap.push(data);
+            //
             //     } catch (e) {
-            //         await  console.log('releasesMap не смог отдать: ', e); // Ошибка!
+            //         v = await  console.log('releasesMap не смог отдать: ', e); // Ошибка!
             //     }
-            // })
-
-            // .follow('h3>a@href')
-            // .find('.txt>.txt')
-            // .set({
-            //     'header2': 'h3>a/text()',
-            //     'url2': ['h3>a@href']
-            // })
-
-
-            // .find('h3>a')
-            // .set('sectionPop')
-            // .follow('@href')
-            // .find('h1')
-            // .set('h1_02')
-
-            // .data((listing) => {
-            //     // console.log('LISTING: ',listing);
-            //     releasesMap.push(listing);
-            //     try {
-            //         fs.writeFile('data.json', JSON.stringify(releasesMap, null, 4), function (err) {
-            //             if (err) console.error('Возникла ошибка при записи в файл: ', err);
-            //             else console.log(`Data Saved to data.json file.`);
-            //         });
-            //         // ;
-            //     } catch (e) {
-            //         console.log(e); // Ошибка!
-            //     }
+            //
             // })
             .log(console.log)
             .error(err => reject(err))
-            .debug(console.log)
-            .done(() => resolve(headersFluke));
+            // .debug(console.log)
+            .done(() => resolve(releasesMap));
     });
 }
 
 
-getFluke().then(function (res) {
-    fs.writeFile('data.json', JSON.stringify(res, null, 4), function (err) {
+getFluke().then(async function (res) {
+    await fs.writeFile('data.json', JSON.stringify(res, null, 4), async function (err) {
         if (err) console.error('Возникла ошибка при записи в файл: ', err);
         else console.log(`Data Saved to data.json file.`);
     });
