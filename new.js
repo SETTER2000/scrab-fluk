@@ -187,7 +187,7 @@ instance
                                 ],
                                 informationTable_4: [
                                     osmosis
-                                        .find('.full_text table.content[4] tr') 
+                                        .find('.full_text table.content[4] tr')
                                         .set({
                                             'td-1': 'td[1]',
                                             'td-2': 'td[2]',
