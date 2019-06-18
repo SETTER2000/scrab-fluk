@@ -3,112 +3,212 @@ const url = require('url');
 const fs = require('fs');
 const _ = require('lodash');
 const domain = 'http://www.flk.ru/';
-
-
-async function subSubSection(res) {
-    console.log('Функция subSubSection. Сюда должны подключиться: ', res);
-    return new Promise(async (resolve, reject) => {
-        let releasesMap = [];
-        await  osmosis
-            .get(res)
-            .filter('.txt .txt >h3')
-            .set({
-                'name': 'a/text()',
-                'productUrl': 'a@href',
-                'litters': 'p',
-                'owners': 'p',
-            })
-            .then(async (context, data, next) => {
-                try {
-                    data.productUrl = data.productUrl.replace(/\.\.\//gi, domain);
-                } catch (e) {
-                    await  console.log(e); // Ошибка!
-                }
-            })
-            .delay(2000)
-            .data(data => releasesMap.push(data))
-            .error(err => reject(err))
-            // .debug(console.log)
-            .done(() => resolve(releasesMap));
-    });
-}
-
-
-async function subSection(res) {
-    console.log('Функция subSection. Сюда должны подключиться: ', res);
-    return new Promise(async (resolve, reject) => {
-        let releasesMap = [];
-        await  osmosis
-            .get(res)
-            .find('.txt .txt >h3')
-            .set({
-                'name': 'a/text()',
-                'subSectionUrl': 'a@href',
-                'subSubSection': 'p'
-            })
-            .then(async (context, data) => {
-                try {
-                    data.subSubSectionUrl = data.subSubSectionUrl.replace(/\.\.\//gi, domain);
-                    data.subSubSection = await subSubSection(data.subSubSectionUrl);
-                } catch (e) {
-                    await  console.log(e);
-                }
-            })
-            .delay(10000)
-            .data(data => releasesMap.push(data))
-            .error(err => reject(err))
-            // .debug(console.log)
-            .done(() => resolve(releasesMap));
-    });
-}
-
-async function getFluke() {
-    return new Promise(async (resolve, reject) => {
-        let releasesMap = [];
-        await  osmosis
-            .get(domain)
-            .find('.txt > .txt > h3')
-            .set({
-                'section': 'a/text()',
-                'sectionUrl': 'a@href',
-                'subSections': 'p'
-            })
-            .then(async (context, data) => {
-                try {
-                    data.sectionUrl = `${domain}${data.sectionUrl}`;
-                    data.subSections = await subSection(data.sectionUrl);
-                } catch (e) {
-                    await  console.log(`Обработка обещаний subSection url: ${data.sectionUrl} : `, e); // Ошибка!
-
-                }
-            })
-            .delay(120000)
-            .data(data => releasesMap.push(data))
-            // .then(async (context, data) => {
-            //     let v;
-            //     try {
-            //         await releasesMap.push(data);
-            //
-            //     } catch (e) {
-            //         v = await  console.log('releasesMap не смог отдать: ', e); // Ошибка!
-            //     }
-            //
-            // })
-            .log(console.log)
-            .error(err => reject(err))
-            // .debug(console.log)
-            .done(() => resolve(releasesMap));
-    });
-}
-
-
-getFluke().then(async function (res) {
+osmosis.config('concurrency', 2);
+osmosis.config('follow_set_cookies', true);
+osmosis.config('follow_set_referer', true);
+osmosis.config('follow', 10);
+let releasesMap = [];
+instance = new osmosis(domain);
+instance.run();
+const write = async (res) => {
     await fs.writeFile('data.json', JSON.stringify(res, null, 4), async function (err) {
         if (err) console.error('Возникла ошибка при записи в файл: ', err);
         else console.log(`Data Saved to data.json file.`);
     });
-    // console.log('Вывод в функции getCountry:', res);
+};
 
-}, function (err) {
-    console.log('Ошибка! В функции getFluke:', err);
-});
+instance
+    .find('.txt > .txt > h3')
+    .set({
+        'section': 'a/text()',
+        subDirs: [
+            osmosis
+                .follow('a@href')
+                .find('.txt .txt >h3')
+                .set({
+                    'subDir': 'a/text()',
+                    'subDirUrl': 'a@href'
+                })
+                .then(async (context, data) => {
+                    try {
+                        data.subDirUrl = await data.subDirUrl.replace(/\.\.\//gi, domain);
+                    } catch (e) {
+                        await  console.log(e);
+                    }
+                })
+                .set({
+                    subSections: [
+                        osmosis
+                            .follow('a@href')
+                            .find('.txt .txt >h3')
+                            .set({
+                                'subSection': 'a/text()',
+                                'subSectionUrl': 'a@href',
+                            })
+                            .then(async (context, data) => {
+                                try {
+                                    data.subSectionUrl = await `${domain}${data.subSectionUrl}`;
+                                } catch (e) {
+                                    await  console.log(e);
+                                }
+                            })
+                            .get((context, data) => data.subSectionUrl)
+                            .find('head') //
+                            .set({
+                                'title': 'title',
+                                'meta': 'meta@content',
+                            })
+                            .then((context, data) => {
+                                data.endUrl = _.slice(_.split(data.meta, '='), 1).toString();
+                                data.newUrlPage = data.subSectionUrl.replace(/default\.htm/gi, data.endUrl);
+                            })
+                            .get((content, data) => data.newUrlPage)
+                            .set({
+                                productPage: [
+                                    osmosis
+                                        .find('.txt')
+                                        .set({
+                                            'imgPrev': 'table.cat4 tr img@src',
+                                            'imgTitle': 'table.cat4 tr img@title',
+                                            'imgAlt': 'table.cat4 tr img@alt',
+                                            'header': 'table.cat4 tr ul>li[1]/text()',
+                                            'text': 'table.cat4 tr ul>li[2]/text()',
+                                            'textUrl': 'table.cat4 tr ul>li[2]>a@href',
+                                            'text2': 'table.cat4 tr ul>li[3]/text()',
+                                            'text2Url': 'table.cat4 tr ul>li[3]>a@href',
+                                            'price': '.price/text()',
+                                            'full_text':'.full_text[1]'
+                                        })
+                                        .then((context, data) => {
+                                            data.price = _.split(data.price, '.')[0].toString();
+                                        })
+                                        .find('.full_text')
+                                        .set({
+                                            'img':['img@src'],
+                                            descriptions:[
+                                                osmosis
+                                                    .find('p')
+                                                    .set('p')
+                                            ]
+                                        })
+                                ],
+                            })
+                            .then((context, data)=>{
+                                data.specificationUrl = data.subSectionUrl.replace(/default\.htm/gi, data.productPage[0].textUrl);
+                                data.informationUrl = data.subSectionUrl.replace(/default\.htm/gi, data.productPage[0].text2Url);
+                            })
+                            .get((content, data) => data.specificationUrl)
+                            .set({
+                                specificationTable: [
+                                    osmosis
+                                        .find('.txt table.content tr') //
+                                        .set({
+                                            'td-1': 'td[1]',
+                                            'td-2': 'td[2]',
+                                            'td-3': 'td[3]',
+                                            'td-4': 'td[4]',
+                                            'td-5': 'td[5]',
+                                            'td-6': 'td[6]',
+                                            'td-7': 'td[7]',
+                                            'td-8': 'td[8]',
+                                            'td-9': 'td[9]',
+                                            'td-10': 'td[10]',
+                                        })
+
+                                        //
+                                        // .then((context, data) => {
+                                        //     // console.log('SASSS: ' , foo);
+                                        //     data.price = _.split(data.price, '.')[0].toString();
+                                        //
+                                        // })
+                                        // .find('.full_text')
+                                        // .set({
+                                        //     'img':'img@src',
+                                        //     descriptions:[
+                                        //         osmosis
+                                        //             .find('p')
+                                        //             .set('p')
+                                        //     ]
+                                        // })
+                                        //
+
+                                ]
+                            })
+                            .get((content, data) => data.informationUrl)
+                            .set({
+                                'informToOrder':'.full_text>p',
+                                informationTable_1: [
+                                    osmosis
+                                        .find('.full_text table.content[1] tr') //
+                                        .set({
+                                            'td-1': 'td[1]',
+                                            'td-2': 'td[2]',
+                                            'td-3': 'td[3]',
+                                            'td-4': 'td[4]',
+                                            'td-5': 'td[5]',
+                                            'td-6': 'td[6]',
+                                            'td-7': 'td[7]',
+                                            'td-8': 'td[8]',
+                                            'td-9': 'td[9]',
+                                            'td-10': 'td[10]',
+                                        })
+                                ],
+                                informationTable_2: [
+                                    osmosis
+                                        .find('.full_text table.content[2] tr') //
+                                        .set({
+                                            'td-1': 'td[1]',
+                                            'td-2': 'td[2]',
+                                            'td-3': 'td[3]',
+                                            'td-4': 'td[4]',
+                                            'td-5': 'td[5]',
+                                            'td-6': 'td[6]',
+                                            'td-7': 'td[7]',
+                                            'td-8': 'td[8]',
+                                            'td-9': 'td[9]',
+                                            'td-10': 'td[10]',
+                                        })
+                                ],
+                                informationTable_3: [
+                                    osmosis
+                                        .find('.full_text table.content[3] tr') //
+                                        .set({
+                                            'td-1': 'td[1]',
+                                            'td-2': 'td[2]',
+                                            'td-3': 'td[3]',
+                                            'td-4': 'td[4]',
+                                            'td-5': 'td[5]',
+                                            'td-6': 'td[6]',
+                                            'td-7': 'td[7]',
+                                            'td-8': 'td[8]',
+                                            'td-9': 'td[9]',
+                                            'td-10': 'td[10]',
+                                        })
+                                ],
+                                informationTable_4: [
+                                    osmosis
+                                        .find('.full_text table.content[4] tr')
+                                        .set({
+                                            'td-1': 'td[1]',
+                                            'td-2': 'td[2]',
+                                            'td-3': 'td[3]',
+                                            'td-4': 'td[4]',
+                                            'td-5': 'td[5]',
+                                            'td-6': 'td[6]',
+                                            'td-7': 'td[7]',
+                                            'td-8': 'td[8]',
+                                            'td-9': 'td[9]',
+                                            'td-10': 'td[10]',
+                                        })
+                                ],
+                            })
+
+                    ]
+                })
+        ]
+    })
+    .data(data => releasesMap.push(data))
+    // .log(console.log)
+    .error(err => err)
+    // .debug(console.log)
+    .done(async () => write(releasesMap));
